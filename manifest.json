@@ -1,0 +1,9 @@
+{
+    "id": "waypointier",
+    "name": "Waypointier",
+    "version": "1.0.0",
+    "minAppVersion": "0.15.0",
+    "description": "Basically a clone of the great Waypoint plugin, but for any specified file, not just in Folder Notes.",
+    "author": "julius-gmeinder",
+    "isDesktopOnly": false
+  }
