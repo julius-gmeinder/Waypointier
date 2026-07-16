@@ -5,7 +5,7 @@ this is basically a functional clone of the [Waypoint](https://github.com/Idrees
 Instead of using folder-notes, you use regex to define which notes are allowed to contain a waypoint.
 
 Otherwise, the functionality is identical:
-- `%% Waypoint` triggers a aypoint to spawn.
+- `%% Waypoint %%` triggers a waypoint to spawn.
 - `%% Begin Waypoint %%` and `%% End Waypoint %%` mark the bounds of the waypoint.
 
 ## Disclaimer
