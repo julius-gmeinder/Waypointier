@@ -24,107 +24,132 @@ const EXTENSION_MAP: Record<string, string[]> = {
 export default class Waypointier extends Plugin {
     settings: WaypointierSettings = DEFAULT_SETTINGS;
     knownWaypoints: Set<string> = new Set();
+    compiledRegex: RegExp = /.*/;
+    
+    private writeQueue: Promise<void> = Promise.resolve();
+    private modifyTimers = new Map<string, number>();
 
     async onload() {
         await this.loadSettings();
         this.addSettingTab(new WaypointierSettingTab(this.app, this));
 
-        const bubbleUp = async (startFolder: TFolder | null) => {
-            let currentFolder = startFolder;
+        this.app.workspace.onLayoutReady(async () => {
+            this.registerEvent(this.app.vault.on('modify', (file) => {
+                if (file instanceof TFile && file.extension === 'md' && this.isAllowedFile(file)) {
+                    this.queueModifyCheck(file);
+                }
+            }));
+    
+            this.registerEvent(this.app.vault.on('create', (file) => {
+                if (file.parent) {
+                    this.bubbleUp(file.parent);
+                }
+            }));
             
-            while (currentFolder) {
-                for (const child of currentFolder.children) {
-                    if (child instanceof TFile && child.extension === 'md' && this.isAllowedFile(child)) {
-                        const content = await this.app.vault.cachedRead(child);
-
-                        if (content.includes(WAYPOINT_START) || content.includes(WAYPOINT_TRIGGER)) {
-                            this.knownWaypoints.add(child.path);
-                            await this.updateWaypoint(child);
-                        }
-                    }
+            this.registerEvent(this.app.vault.on('delete', (file) => {
+                if (file instanceof TFile) {
+                    this.knownWaypoints.delete(file.path);
                 }
                 
-                currentFolder = currentFolder.parent;
-            }
-        };
-
-        this.registerEvent(this.app.vault.on('modify', async (file) => {
-            if (file instanceof TFile && file.extension === 'md' && this.isAllowedFile(file)) {
-                const content = await this.app.vault.read(file);
-                const hasWaypoint = content.includes(WAYPOINT_START) || content.includes(WAYPOINT_TRIGGER);
+                const parentPath = file.path.substring(0, file.path.lastIndexOf('/'));
+                const parentFolder = this.app.vault.getAbstractFileByPath(parentPath || '/');
                 
-                let statusChanged = false;
-
-                if (hasWaypoint) {
-                    if (!this.knownWaypoints.has(file.path)) {
-                        this.knownWaypoints.add(file.path);
-                        statusChanged = true;
-                    }
-                    await this.updateWaypoint(file);
-                } else {
-                    if (this.knownWaypoints.has(file.path)) {
-                        this.knownWaypoints.delete(file.path);
-                        statusChanged = true;
-                    }
+                if (parentFolder instanceof TFolder) {
+                    this.bubbleUp(parentFolder);
+                }
+            }));
+            
+            this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+                if (file instanceof TFile) {
+                    this.knownWaypoints.delete(oldPath);
                 }
 
-                if (statusChanged && file.parent) {
-                    bubbleUp(file.parent);
+                if (file.parent) {
+                    this.bubbleUp(file.parent);
+                }
+                
+                const oldParentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+                const oldParent = this.app.vault.getAbstractFileByPath(oldParentPath || '/');
+
+                if (oldParent instanceof TFolder) {
+                    this.bubbleUp(oldParent);
+                }
+            }));
+        });
+    }
+
+    private queueModifyCheck(file: TFile) {
+        window.clearTimeout(this.modifyTimers.get(file.path));
+        
+        this.modifyTimers.set(file.path, window.setTimeout(async () => {
+            const content = await this.app.vault.read(file);
+            const hasWaypoint = content.includes(WAYPOINT_START) || content.includes(WAYPOINT_TRIGGER);
+            
+            let statusChanged = false;
+
+            if (hasWaypoint) {
+                if (!this.knownWaypoints.has(file.path)) {
+                    this.knownWaypoints.add(file.path);
+                    statusChanged = true;
+                }
+                await this.updateWaypoint(file);
+            } else {
+                if (this.knownWaypoints.has(file.path)) {
+                    this.knownWaypoints.delete(file.path);
+                    statusChanged = true;
                 }
             }
-        }));
 
-        this.registerEvent(this.app.vault.on('create', (file) => {
-            if (file.parent)
-                bubbleUp(file.parent);
-        }));
+            if (statusChanged && file.parent) {
+                this.bubbleUp(file.parent);
+            }
+        }, 1000));
+    }
+
+    async bubbleUp(startFolder: TFolder | null) {
+        let currentFolder = startFolder;
         
-        this.registerEvent(this.app.vault.on('delete', (file) => {
-            if (file instanceof TFile)
-                this.knownWaypoints.delete(file.path);
+        while (currentFolder) {
+            for (const child of currentFolder.children) {
+                if (child instanceof TFile && child.extension === 'md' && this.isAllowedFile(child)) {
+                    const content = await this.app.vault.cachedRead(child);
 
-            if (file.parent)
-                bubbleUp(file.parent);
-        }));
-        
-        this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-            if (file instanceof TFile)
-                this.knownWaypoints.delete(oldPath);
+                    if (content.includes(WAYPOINT_START) || content.includes(WAYPOINT_TRIGGER)) {
+                        this.knownWaypoints.add(child.path);
+                        await this.updateWaypoint(child);
+                    }
+                }
+            }
+            currentFolder = currentFolder.parent;
+        }
+    }
 
-            if (file.parent)
-                bubbleUp(file.parent);
-            
-            const oldParentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
-            const oldParent = this.app.vault.getAbstractFileByPath(oldParentPath || '/');
-
-            if (oldParent instanceof TFolder)
-                bubbleUp(oldParent);
-        }));
+    updateRegex() {
+        try {
+            this.compiledRegex = new RegExp(this.settings.allowedFileRegex);
+        } catch (e) {
+            console.error("Invalid regex in Waypointier settings", e);
+            this.compiledRegex = /.*/; 
+        }
     }
 
     isAllowedFile(file: TFile): boolean {
-        try {
-            const regex = new RegExp(this.settings.allowedFileRegex);
-            return regex.test(file.name);
-        } catch (e) {
-            console.error("Invalid regex in Waypointier settings", e);
-            return true;
-        }
+        return this.compiledRegex.test(file.name);
     }
 
     shouldIncludeFile(file: TFile): boolean {
         if (this.settings.fileFilter === 'all')
             return true;
-        
+
         const allowedExtensions = EXTENSION_MAP[this.settings.fileFilter] || ['md'];
         return allowedExtensions.includes(file.extension.toLowerCase());
     }
 
     getDisplayName(file: TFile): string {
         switch (this.settings.showExtensions) {
-            case 'all': 
+            case 'all':
                 return file.name;
-            case 'non-md': 
+            case 'non-md':
                 return file.extension.toLowerCase() === 'md' ? file.basename : file.name;
             case 'none':
             default:
@@ -132,34 +157,54 @@ export default class Waypointier extends Plugin {
         }
     }
 
+    private async queuedWrite(file: TFile, content: string) {
+        this.writeQueue = this.writeQueue.then(async () => {
+            const current = await this.app.vault.read(file);
+
+            if (current !== content) {
+                await this.app.vault.modify(file, content);
+            }
+        }).catch(console.error);
+
+        return this.writeQueue;
+    }
+
     async updateWaypoint(file: TFile) {
-        if (!this.isAllowedFile(file))
+        if (!this.isAllowedFile(file)) {
             return;
+        }
 
         const originalContent = await this.app.vault.read(file);
-        let content = originalContent;
         
-        const startIndex = content.indexOf(WAYPOINT_START);
-        const endIndex = content.indexOf(WAYPOINT_END, startIndex);
-        const triggerIndex = content.indexOf(WAYPOINT_TRIGGER);
+        const triggerIndex = originalContent.indexOf(WAYPOINT_TRIGGER);
+        const startIndex = originalContent.indexOf(WAYPOINT_START);
         
-        if (triggerIndex === -1 && (startIndex === -1 || endIndex === -1))
+        if (triggerIndex === -1 && startIndex === -1) {
             return;
-        
-        if (!file.parent)
+        }
+
+        if (!file.parent) {
             return;
+        }
 
         const tree = await this.buildTree(file.parent, file.path);
         const newBlock = `${WAYPOINT_START}\n${tree}\n${WAYPOINT_END}`;
 
-        if (triggerIndex !== -1) {
-            content = content.substring(0, triggerIndex) + newBlock + content.substring(triggerIndex + WAYPOINT_TRIGGER.length);
-        } else if (startIndex !== -1 && endIndex !== -1) {
-            content = content.substring(0, startIndex) + newBlock + content.substring(endIndex + WAYPOINT_END.length);
-        }
+        const blockRegex = new RegExp(`${WAYPOINT_START}[\\s\\S]*?${WAYPOINT_END}`, 'g');
+        const triggerRegex = new RegExp(WAYPOINT_TRIGGER, 'g');
+
+        const insertPos = triggerIndex !== -1 ? triggerIndex : startIndex;
+        
+        let before = originalContent.substring(0, insertPos);
+        let after = originalContent.substring(insertPos);
+
+        before = before.replace(blockRegex, '').replace(triggerRegex, '');
+        after = after.replace(blockRegex, '').replace(triggerRegex, '');
+
+        const content = before + newBlock + after;
 
         if (content !== originalContent) {
-            await this.app.vault.modify(file, content);
+            await this.queuedWrite(file, content);
         }
     }
 
@@ -170,11 +215,13 @@ export default class Waypointier extends Plugin {
             const aIsFolder = a instanceof TFolder;
             const bIsFolder = b instanceof TFolder;
 
-            if (aIsFolder && !bIsFolder)
+            if (aIsFolder && !bIsFolder) {
                 return -1;
+            }
 
-            if (!aIsFolder && bIsFolder)
+            if (!aIsFolder && bIsFolder) {
                 return 1;
+            }
 
             return a.name.localeCompare(b.name);
         });
@@ -204,8 +251,9 @@ export default class Waypointier extends Plugin {
                 }
 
             } else if (child instanceof TFile) {
-                if (child.path === originPath)
+                if (child.path === originPath) {
                     continue; 
+                }
 
                 if (this.shouldIncludeFile(child)) {
                     treeString += `${indent}- [[${child.path}|${this.getDisplayName(child)}]]\n`;
@@ -218,10 +266,12 @@ export default class Waypointier extends Plugin {
 
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        this.updateRegex();
     }
 
     async saveSettings() {
         await this.saveData(this.settings);
+        this.updateRegex();
     }
 }
 
