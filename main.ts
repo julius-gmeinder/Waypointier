@@ -1,16 +1,16 @@
 import { App, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 
-const WAYPOINT_START = "%% Begin Waypoint %%";
-const WAYPOINT_END = "%% End Waypoint %%";
-const WAYPOINT_TRIGGER = "%% Waypoint %%";
+const ANCHOR_START = "%% Begin Anchor %%";
+const ANCHOR_END = "%% End Anchor %%";
+const ANCHOR_TRIGGER = "%% Anchor %%";
 
-interface WaypointierSettings {
+interface AnchorNotesSettings {
     allowedFileRegex: string;
     fileFilter: string;
     showExtensions: string;
 }
 
-const DEFAULT_SETTINGS: WaypointierSettings = {
+const DEFAULT_SETTINGS: AnchorNotesSettings = {
     allowedFileRegex: '.*',
     fileFilter: 'native',
     showExtensions: 'non-md',
@@ -21,9 +21,9 @@ const EXTENSION_MAP: Record<string, string[]> = {
     'native': ['md', 'canvas', 'base'],
 };
 
-export default class Waypointier extends Plugin {
-    settings: WaypointierSettings = DEFAULT_SETTINGS;
-    knownWaypoints: Set<string> = new Set();
+export default class AnchorNotes extends Plugin {
+    settings: AnchorNotesSettings = DEFAULT_SETTINGS;
+    knownAnchors: Set<string> = new Set();
     compiledRegex: RegExp = /.*/;
     
     private writeQueue: Promise<void> = Promise.resolve();
@@ -31,7 +31,7 @@ export default class Waypointier extends Plugin {
 
     async onload() {
         await this.loadSettings();
-        this.addSettingTab(new WaypointierSettingTab(this.app, this));
+        this.addSettingTab(new AnchorNotesSettingTab(this.app, this));
 
         this.app.workspace.onLayoutReady(async () => {
             this.registerEvent(this.app.vault.on('modify', (file) => {
@@ -48,7 +48,7 @@ export default class Waypointier extends Plugin {
             
             this.registerEvent(this.app.vault.on('delete', (file) => {
                 if (file instanceof TFile) {
-                    this.knownWaypoints.delete(file.path);
+                    this.knownAnchors.delete(file.path);
                 }
                 
                 const parentPath = file.path.substring(0, file.path.lastIndexOf('/'));
@@ -61,7 +61,7 @@ export default class Waypointier extends Plugin {
             
             this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
                 if (file instanceof TFile) {
-                    this.knownWaypoints.delete(oldPath);
+                    this.knownAnchors.delete(oldPath);
                 }
 
                 if (file.parent) {
@@ -83,19 +83,19 @@ export default class Waypointier extends Plugin {
         
         this.modifyTimers.set(file.path, window.setTimeout(async () => {
             const content = await this.app.vault.read(file);
-            const hasWaypoint = content.includes(WAYPOINT_START) || content.includes(WAYPOINT_TRIGGER);
+            const hasAnchor = content.includes(ANCHOR_START) || content.includes(ANCHOR_TRIGGER);
             
             let statusChanged = false;
 
-            if (hasWaypoint) {
-                if (!this.knownWaypoints.has(file.path)) {
-                    this.knownWaypoints.add(file.path);
+            if (hasAnchor) {
+                if (!this.knownAnchors.has(file.path)) {
+                    this.knownAnchors.add(file.path);
                     statusChanged = true;
                 }
-                await this.updateWaypoint(file);
+                await this.updateAnchor(file);
             } else {
-                if (this.knownWaypoints.has(file.path)) {
-                    this.knownWaypoints.delete(file.path);
+                if (this.knownAnchors.has(file.path)) {
+                    this.knownAnchors.delete(file.path);
                     statusChanged = true;
                 }
             }
@@ -114,9 +114,9 @@ export default class Waypointier extends Plugin {
                 if (child instanceof TFile && child.extension === 'md' && this.isAllowedFile(child)) {
                     const content = await this.app.vault.cachedRead(child);
 
-                    if (content.includes(WAYPOINT_START) || content.includes(WAYPOINT_TRIGGER)) {
-                        this.knownWaypoints.add(child.path);
-                        await this.updateWaypoint(child);
+                    if (content.includes(ANCHOR_START) || content.includes(ANCHOR_TRIGGER)) {
+                        this.knownAnchors.add(child.path);
+                        await this.updateAnchor(child);
                     }
                 }
             }
@@ -128,7 +128,7 @@ export default class Waypointier extends Plugin {
         try {
             this.compiledRegex = new RegExp(this.settings.allowedFileRegex);
         } catch (e) {
-            console.error("Invalid regex in Waypointier settings", e);
+            console.error("Invalid regex in AnchorNotes settings", e);
             this.compiledRegex = /.*/; 
         }
     }
@@ -169,15 +169,15 @@ export default class Waypointier extends Plugin {
         return this.writeQueue;
     }
 
-    async updateWaypoint(file: TFile) {
+    async updateAnchor(file: TFile) {
         if (!this.isAllowedFile(file)) {
             return;
         }
 
         const originalContent = await this.app.vault.read(file);
         
-        const triggerIndex = originalContent.indexOf(WAYPOINT_TRIGGER);
-        const startIndex = originalContent.indexOf(WAYPOINT_START);
+        const triggerIndex = originalContent.indexOf(ANCHOR_TRIGGER);
+        const startIndex = originalContent.indexOf(ANCHOR_START);
         
         if (triggerIndex === -1 && startIndex === -1) {
             return;
@@ -188,10 +188,10 @@ export default class Waypointier extends Plugin {
         }
 
         const tree = await this.buildTree(file.parent, file.path);
-        const newBlock = `${WAYPOINT_START}\n${tree}\n${WAYPOINT_END}`;
+        const newBlock = `${ANCHOR_START}\n${tree}\n${ANCHOR_END}`;
 
-        const blockRegex = new RegExp(`${WAYPOINT_START}[\\s\\S]*?${WAYPOINT_END}`, 'g');
-        const triggerRegex = new RegExp(WAYPOINT_TRIGGER, 'g');
+        const blockRegex = new RegExp(`${ANCHOR_START}[\\s\\S]*?${ANCHOR_END}`, 'g');
+        const triggerRegex = new RegExp(ANCHOR_TRIGGER, 'g');
 
         const insertPos = triggerIndex !== -1 ? triggerIndex : startIndex;
         
@@ -234,8 +234,8 @@ export default class Waypointier extends Plugin {
                     if (sub instanceof TFile && sub.extension === 'md' && this.isAllowedFile(sub)) {
                         const subContent = await this.app.vault.cachedRead(sub);
 
-                        if (subContent.includes(WAYPOINT_TRIGGER) || subContent.includes(WAYPOINT_START)) {
-                            this.knownWaypoints.add(sub.path);
+                        if (subContent.includes(ANCHOR_TRIGGER) || subContent.includes(ANCHOR_START)) {
+                            this.knownAnchors.add(sub.path);
                             boundaryFiles.push(sub);
                         }
                     }
@@ -275,10 +275,10 @@ export default class Waypointier extends Plugin {
     }
 }
 
-class WaypointierSettingTab extends PluginSettingTab {
-    plugin: Waypointier;
+class AnchorNotesSettingTab extends PluginSettingTab {
+    plugin: AnchorNotes;
 
-    constructor(app: App, plugin: Waypointier) {
+    constructor(app: App, plugin: AnchorNotes) {
         super(app, plugin);
         this.plugin = plugin;
     }
@@ -289,7 +289,7 @@ class WaypointierSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Allowed Files Regex')
-            .setDesc('Only files matching this Regex can trigger/contain Waypoints. (e.g., ^__.*)')
+            .setDesc('Only files matching this Regex can trigger/contain Anchors. (e.g., ^__.*)')
             .addText(text => text
                 .setPlaceholder('.*')
                 .setValue(this.plugin.settings.allowedFileRegex)
@@ -300,7 +300,7 @@ class WaypointierSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Included File Types')
-            .setDesc('Choose which files show up in the Waypoint list.')
+            .setDesc('Choose which files show up in the Anchor list.')
             .addDropdown(drop => drop
                 .addOption('md', 'Markdown (.md)')
                 .addOption('native', 'Obsidian Natives (.md, .canvas, .base)')
@@ -313,7 +313,7 @@ class WaypointierSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Show Extensions')
-            .setDesc('Choose how file extensions are displayed in the Waypoint list.')
+            .setDesc('Choose how file extensions are displayed in the Anchor list.')
             .addDropdown(drop => drop
                 .addOption('none', 'Display no extensions')
                 .addOption('non-md', 'Display only non .md extensions')
