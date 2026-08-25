@@ -1,7 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 
-const ANCHOR_START = "%% Begin Anchor %%";
-const ANCHOR_END = "%% End Anchor %%";
+const ANCHOR_START = "%% Anchor Start %%";
+const ANCHOR_END = "%% Anchor End %%";
 const ANCHOR_TRIGGER = "%% Anchor %%";
 
 interface AnchorNotesSettings {
