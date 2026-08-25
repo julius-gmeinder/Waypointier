@@ -22,11 +22,11 @@ body.anchor-notes-pin-top .nav-file.is-anchor-note {
 /* bottom pin */
 
 body.anchor-notes-pin-bottom .nav-folder {
-    order: 2;
+    order: 1;
 }
 
 body.anchor-notes-pin-bottom .nav-file {
-    order: 1;
+    order: 2;
 }
 
 body.anchor-notes-pin-bottom .nav-file.is-anchor-note {
