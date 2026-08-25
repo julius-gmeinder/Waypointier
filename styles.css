@@ -1,0 +1,34 @@
+body.anchor-notes-pin-top .nav-folder-children,
+body.anchor-notes-pin-bottom .nav-folder-children {
+    display: flex;
+    flex-direction: column;
+}
+
+/* top pin */
+
+body.anchor-notes-pin-top .nav-folder {
+    order: 2;
+}
+
+body.anchor-notes-pin-top .nav-file {
+    order: 3;
+}
+
+body.anchor-notes-pin-top .nav-file.is-anchor-note {
+    order: 1 !important;
+}
+
+
+/* bottom pin */
+
+body.anchor-notes-pin-bottom .nav-folder {
+    order: 2;
+}
+
+body.anchor-notes-pin-bottom .nav-file {
+    order: 1;
+}
+
+body.anchor-notes-pin-bottom .nav-file.is-anchor-note {
+    order: 3 !important;
+}

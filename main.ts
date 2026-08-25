@@ -8,12 +8,14 @@ interface AnchorNotesSettings {
     allowedFileRegex: string;
     fileFilter: string;
     showExtensions: string;
+    positionInFolder: 'top' | 'bottom' | 'default';
 }
 
 const DEFAULT_SETTINGS: AnchorNotesSettings = {
     allowedFileRegex: '.*',
     fileFilter: 'native',
     showExtensions: 'non-md',
+    positionInFolder: 'top',
 }
 
 const EXTENSION_MAP: Record<string, string[]> = {
@@ -34,6 +36,12 @@ export default class AnchorNotes extends Plugin {
         this.addSettingTab(new AnchorNotesSettingTab(this.app, this));
 
         this.app.workspace.onLayoutReady(async () => {
+            this.updateFileExplorerClasses();
+
+            this.registerEvent(this.app.workspace.on('layout-change', () => {
+                this.updateFileExplorerClasses();
+            }));
+
             this.registerEvent(this.app.vault.on('modify', (file) => {
                 if (file instanceof TFile && file.extension === 'md' && this.isAllowedFile(file)) {
                     this.queueModifyCheck(file);
@@ -41,6 +49,9 @@ export default class AnchorNotes extends Plugin {
             }));
     
             this.registerEvent(this.app.vault.on('create', (file) => {
+                if (file instanceof TFile) {
+                    this.updateFileExplorerClasses();
+                }
                 if (file.parent) {
                     this.bubbleUp(file.parent);
                 }
@@ -62,6 +73,7 @@ export default class AnchorNotes extends Plugin {
             this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
                 if (file instanceof TFile) {
                     this.knownAnchors.delete(oldPath);
+                    this.updateFileExplorerClasses();
                 }
 
                 if (file.parent) {
@@ -76,6 +88,12 @@ export default class AnchorNotes extends Plugin {
                 }
             }));
         });
+
+
+    }
+
+    async onunload() {
+        document.body.classList.remove('anchor-notes-pin-top', 'anchor-notes-pin-bottom');
     }
 
     private queueModifyCheck(file: TFile) {
@@ -264,14 +282,45 @@ export default class AnchorNotes extends Plugin {
         return treeString;
     }
 
+    updateBodyClass() {
+        document.body.classList.remove('anchor-notes-pin-top', 'anchor-notes-pin-bottom');
+        if (this.settings.positionInFolder === 'top') {
+            document.body.classList.add('anchor-notes-pin-top');
+        } else if (this.settings.positionInFolder === 'bottom') {
+            document.body.classList.add('anchor-notes-pin-bottom');
+        }
+    }
+
+    updateFileExplorerClasses() {
+        const leaves = this.app.workspace.getLeavesOfType('file-explorer');
+        leaves.forEach(leaf => {
+            // @ts-expect-error accessing undocumented internal property
+            const fileItems = leaf.view.fileItems;
+            if (fileItems) {
+                Object.values(fileItems).forEach((item: any) => {
+                    if (item.file instanceof TFile) {
+                        if (this.isAllowedFile(item.file)) {
+                            item.el.classList.add('is-anchor-note');
+                        } else {
+                            item.el.classList.remove('is-anchor-note');
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
         this.updateRegex();
+        this.updateBodyClass();
     }
 
     async saveSettings() {
         await this.saveData(this.settings);
         this.updateRegex();
+        this.updateBodyClass();
+        this.updateFileExplorerClasses();
     }
 }
 
@@ -295,6 +344,19 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.allowedFileRegex)
                 .onChange(async (value) => {
                     this.plugin.settings.allowedFileRegex = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Position in Folder')
+            .setDesc('Choose where Anchor Notes should be pinned in the file explorer.')
+            .addDropdown(drop => drop
+                .addOption('top', 'Pin to folder top')
+                .addOption('bottom', 'Pin to folder bottom')
+                .addOption('default', 'Use default sorting')
+                .setValue(this.plugin.settings.positionInFolder)
+                .onChange(async (value) => {
+                    this.plugin.settings.positionInFolder = value as 'top' | 'bottom' | 'default';
                     await this.plugin.saveSettings();
                 }));
 
