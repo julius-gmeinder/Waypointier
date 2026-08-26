@@ -1,9 +1,9 @@
 {
     "id": "anchor-notes",
     "name": "Anchor Notes",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "minAppVersion": "0.15.0",
-    "description": "Basically a clone of the great Waypoint plugin, but for any specified file, not just in Folder Notes.",
+    "description": "Define Anchor Notes with Regex, use Anchors for navigation. Alternative to the popular Folder Notes + Waypoint plugin.",
     "author": "julius-gmeinder",
     "isDesktopOnly": false
   }
