@@ -99,7 +99,7 @@ export default class AnchorNotes extends Plugin {
         
         this.modifyTimers.set(file.path, window.setTimeout(async () => {
             const content = await this.app.vault.read(file);
-            const hasAnchor = content.includes(ANCHOR_START) || content.includes(ANCHOR_TRIGGER);
+            const hasAnchor = content.includes(ANCHOR_TRIGGER) || (content.includes(ANCHOR_START) && content.includes(ANCHOR_END));
             
             let statusChanged = false;
 
@@ -130,7 +130,7 @@ export default class AnchorNotes extends Plugin {
                 if (child instanceof TFile && child.extension === 'md' && this.isAllowedFile(child)) {
                     const content = await this.app.vault.cachedRead(child);
 
-                    if (content.includes(ANCHOR_START) || content.includes(ANCHOR_TRIGGER)) {
+                    if (content.includes(ANCHOR_TRIGGER) || (content.includes(ANCHOR_START) && content.includes(ANCHOR_END))) {
                         this.knownAnchors.add(child.path);
                         await this.updateAnchor(child);
                     }
@@ -147,7 +147,7 @@ export default class AnchorNotes extends Plugin {
         for (const file of files) {
             if (this.isAllowedFile(file)) {
                 const content = await this.app.vault.cachedRead(file);
-                if (content.includes(ANCHOR_START) || content.includes(ANCHOR_TRIGGER)) {
+                if (content.includes(ANCHOR_TRIGGER) || (content.includes(ANCHOR_START) && content.includes(ANCHOR_END))) {
                     this.knownAnchors.add(file.path);
                     await this.updateAnchor(file);
                     updatedCount++;
@@ -207,36 +207,39 @@ export default class AnchorNotes extends Plugin {
         if (!this.isAllowedFile(file)) {
             return;
         }
-
+    
         const originalContent = await this.app.vault.read(file);
         
         const triggerIndex = originalContent.indexOf(ANCHOR_TRIGGER);
         const startIndex = originalContent.indexOf(ANCHOR_START);
+        const endIndex = originalContent.indexOf(ANCHOR_END);
         
-        if (triggerIndex === -1 && startIndex === -1) {
+        if (triggerIndex === -1 && (startIndex === -1 || endIndex === -1)) {
             return;
         }
-
+    
         if (!file.parent) {
             return;
         }
-
+    
         const tree = await this.buildTree(file.parent, file.path);
         const newBlock = `${ANCHOR_START}\n${tree}\n${ANCHOR_END}`;
-
+    
         const blockRegex = new RegExp(`${ANCHOR_START}[\\s\\S]*?${ANCHOR_END}`, 'g');
         const triggerRegex = new RegExp(ANCHOR_TRIGGER, 'g');
-
+        const startRegex = new RegExp(ANCHOR_START, 'g');
+        const endRegex = new RegExp(ANCHOR_END, 'g');
+    
         const insertPos = triggerIndex !== -1 ? triggerIndex : startIndex;
         
         let before = originalContent.substring(0, insertPos);
         let after = originalContent.substring(insertPos);
-
-        before = before.replace(blockRegex, '').replace(triggerRegex, '');
-        after = after.replace(blockRegex, '').replace(triggerRegex, '');
-
+    
+        before = before.replace(blockRegex, '').replace(triggerRegex, '').replace(startRegex, '').replace(endRegex, '');
+        after = after.replace(blockRegex, '').replace(triggerRegex, '').replace(startRegex, '').replace(endRegex, '');
+    
         const content = before + newBlock + after;
-
+    
         if (content !== originalContent) {
             await this.queuedWrite(file, content);
         }
@@ -268,7 +271,7 @@ export default class AnchorNotes extends Plugin {
                     if (sub instanceof TFile && sub.extension === 'md' && this.isAllowedFile(sub)) {
                         const subContent = await this.app.vault.cachedRead(sub);
 
-                        if (subContent.includes(ANCHOR_TRIGGER) || subContent.includes(ANCHOR_START)) {
+                        if (subContent.includes(ANCHOR_TRIGGER) || (subContent.includes(ANCHOR_START) && subContent.includes(ANCHOR_END))) {
                             this.knownAnchors.add(sub.path);
                             boundaryFiles.push(sub);
                         }
@@ -439,7 +442,6 @@ class ConfirmRegenerateModal extends Modal {
                 }))
             .addButton(btn => btn
                 .setButtonText('Regenerate')
-                .setCta()
                 .setDestructive()
                 .onClick(async () => {
                     this.close();
