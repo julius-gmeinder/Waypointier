@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, TFile, TFolder, Modal, Notice } from 'obsidian';
 
 const ANCHOR_START = "%% Anchor Start %%";
 const ANCHOR_END = "%% Anchor End %%";
@@ -12,7 +12,7 @@ interface AnchorNotesSettings {
 }
 
 const DEFAULT_SETTINGS: AnchorNotesSettings = {
-    allowedFileRegex: '.*',
+    allowedFileRegex: '^__.*',
     fileFilter: 'native',
     showExtensions: 'non-md',
     positionInFolder: 'top',
@@ -88,8 +88,6 @@ export default class AnchorNotes extends Plugin {
                 }
             }));
         });
-
-
     }
 
     async onunload() {
@@ -140,6 +138,24 @@ export default class AnchorNotes extends Plugin {
             }
             currentFolder = currentFolder.parent;
         }
+    }
+
+    async regenerateAllAnchors() {
+        const files = this.app.vault.getMarkdownFiles();
+        let updatedCount = 0;
+
+        for (const file of files) {
+            if (this.isAllowedFile(file)) {
+                const content = await this.app.vault.cachedRead(file);
+                if (content.includes(ANCHOR_START) || content.includes(ANCHOR_TRIGGER)) {
+                    this.knownAnchors.add(file.path);
+                    await this.updateAnchor(file);
+                    updatedCount++;
+                }
+            }
+        }
+        
+        new Notice(`Finished regenerating ${updatedCount} anchor(s).`);
     }
 
     updateRegex() {
@@ -336,11 +352,13 @@ class AnchorNotesSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
+        containerEl.createEl('h2', { text: 'Anchor Notes' });
+
         new Setting(containerEl)
             .setName('Allowed Files Regex')
             .setDesc('Only files matching this Regex can trigger/contain Anchors. (e.g., ^__.*)')
             .addText(text => text
-                .setPlaceholder('.*')
+                .setPlaceholder('^__.*')
                 .setValue(this.plugin.settings.allowedFileRegex)
                 .onChange(async (value) => {
                     this.plugin.settings.allowedFileRegex = value;
@@ -359,6 +377,8 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                     this.plugin.settings.positionInFolder = value as 'top' | 'bottom' | 'default';
                     await this.plugin.saveSettings();
                 }));
+
+        containerEl.createEl('h2', { text: 'Anchors' });
 
         new Setting(containerEl)
             .setName('Included File Types')
@@ -385,5 +405,51 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                     this.plugin.settings.showExtensions = value;
                     await this.plugin.saveSettings();
                 }));
+
+        new Setting(containerEl)
+            .setName('Regenerate All Anchors')
+            .setDesc('Manually scan the entire vault and rebuild all existing anchor notes.')
+            .addButton(button => button
+                .setButtonText('Regenerate')
+                .setDestructive()
+                .onClick(() => {
+                    new ConfirmRegenerateModal(this.app, this.plugin).open();
+                }));
+    }
+}
+
+class ConfirmRegenerateModal extends Modal {
+    plugin: AnchorNotes;
+
+    constructor(app: App, plugin: AnchorNotes) {
+        super(app);
+        this.plugin = plugin;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl('h3', { text: 'Regenerate all anchors?' });
+        contentEl.createEl('p', { text: 'This will scan all markdown files in your vault to find and regenerate anchors. Depending on your vault size, this might take a few seconds.' });
+
+        new Setting(contentEl)
+            .addButton(btn => btn
+                .setButtonText('Cancel')
+                .onClick(() => {
+                    this.close();
+                }))
+            .addButton(btn => btn
+                .setButtonText('Regenerate')
+                .setCta()
+                .setDestructive()
+                .onClick(async () => {
+                    this.close();
+                    new Notice('Regenerating anchors...');
+                    await this.plugin.regenerateAllAnchors();
+                }));
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }
