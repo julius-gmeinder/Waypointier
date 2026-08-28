@@ -10,10 +10,10 @@ Otherwise, the anchor functionality is basically a clone of [Waypoint](https://g
 
 ## Disclaimer
 
-- Currently, the plugin is stripped down to the bare minimum, only features i plan on using personally are implemented.
 - I have used AI to develop this plugin, even though i have reviewed the code pretty thoroughly, expect unexpected behavior or bugs.
+- If you come across and bugs, feel free to open an issue
 - I am not affiliated with the original creator of [Waypoint](https://github.com/IdreesInc/Waypoint).
-- This project is (at the moment) intended for personal use only, if you want to use the plugin anyway
+- Build from source
     1. clone the repository `git clone https://github.com/julius-gmeinder/anchor-notes.git`
     2. install dependencies `npm install`
     3. build the plugin `npm run build`
