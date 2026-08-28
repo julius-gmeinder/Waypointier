@@ -23,6 +23,15 @@ const EXTENSION_MAP: Record<string, string[]> = {
     'native': ['md', 'canvas', 'base'],
 };
 
+interface FileExplorerItem {
+    file: TFile | TFolder;
+    el: HTMLElement;
+}
+
+interface FileExplorerView {
+    fileItems?: Record<string, FileExplorerItem>;
+}
+
 export default class AnchorNotes extends Plugin {
     settings: AnchorNotesSettings = DEFAULT_SETTINGS;
     knownAnchors: Set<string> = new Set();
@@ -53,7 +62,7 @@ export default class AnchorNotes extends Plugin {
                     this.updateFileExplorerClasses();
                 }
                 if (file.parent) {
-                    this.bubbleUp(file.parent);
+                    void this.bubbleUp(file.parent);
                 }
             }));
             
@@ -66,7 +75,7 @@ export default class AnchorNotes extends Plugin {
                 const parentFolder = this.app.vault.getAbstractFileByPath(parentPath || '/');
                 
                 if (parentFolder instanceof TFolder) {
-                    this.bubbleUp(parentFolder);
+                    void this.bubbleUp(parentFolder);
                 }
             }));
             
@@ -77,20 +86,20 @@ export default class AnchorNotes extends Plugin {
                 }
 
                 if (file.parent) {
-                    this.bubbleUp(file.parent);
+                    void this.bubbleUp(file.parent);
                 }
                 
                 const oldParentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
                 const oldParent = this.app.vault.getAbstractFileByPath(oldParentPath || '/');
 
                 if (oldParent instanceof TFolder) {
-                    this.bubbleUp(oldParent);
+                    void this.bubbleUp(oldParent);
                 }
             }));
         });
     }
 
-    async onunload() {
+    onunload() {
         document.body.classList.remove('anchor-notes-pin-top', 'anchor-notes-pin-bottom');
     }
 
@@ -117,7 +126,7 @@ export default class AnchorNotes extends Plugin {
             }
 
             if (statusChanged && file.parent) {
-                this.bubbleUp(file.parent);
+                void this.bubbleUp(file.parent);
             }
         }, 1000));
     }
@@ -313,10 +322,9 @@ export default class AnchorNotes extends Plugin {
     updateFileExplorerClasses() {
         const leaves = this.app.workspace.getLeavesOfType('file-explorer');
         leaves.forEach(leaf => {
-            // @ts-expect-error accessing undocumented internal property
-            const fileItems = leaf.view.fileItems;
-            if (fileItems) {
-                Object.values(fileItems).forEach((item: any) => {
+            const view = leaf.view as unknown as FileExplorerView;
+            if (view.fileItems) {
+                Object.values(view.fileItems).forEach((item) => {
                     if (item.file instanceof TFile) {
                         if (this.isAllowedFile(item.file)) {
                             item.el.classList.add('is-anchor-note');
@@ -356,11 +364,11 @@ class AnchorNotesSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         new Setting(containerEl)
-            .setName('Anchor Notes')
+            .setName('Notes Customization')
             .setHeading();
 
         new Setting(containerEl)
-            .setName('Allowed Files Regex')
+            .setName('Define Allowed Files Regex')
             .setDesc('Only files matching this Regex can trigger/contain Anchors. (e.g., ^__.*)')
             .addText(text => text
                 .setPlaceholder('^__.*')
@@ -371,7 +379,7 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Position in Folder')
+            .setName('Set Position In Folder')
             .setDesc('Choose where Anchor Notes should be pinned in the file explorer.')
             .addDropdown(drop => drop
                 .addOption('top', 'Pin to folder top')
@@ -384,11 +392,11 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Anchors')
+            .setName('Anchors Customization')
             .setHeading();
 
         new Setting(containerEl)
-            .setName('Included File Types')
+            .setName('Select Included File Types')
             .setDesc('Choose which files show up in the Anchor list.')
             .addDropdown(drop => drop
                 .addOption('md', 'Markdown (.md)')
@@ -401,7 +409,7 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Show Extensions')
+            .setName('Display Extensions')
             .setDesc('Choose how file extensions are displayed in the Anchor list.')
             .addDropdown(drop => drop
                 .addOption('none', 'Display no extensions')
@@ -415,7 +423,7 @@ class AnchorNotesSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Regenerate All Anchors')
-            .setDesc('Manually scan the entire vault and rebuild all existing anchor notes.')
+            .setDesc('Manually scan the entire vault and rebuild all existing anchor notes, useful after changing the settings above.')
             .addButton(button => button
                 .setButtonText('Regenerate')
                 .setDestructive()

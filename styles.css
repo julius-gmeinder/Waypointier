@@ -6,29 +6,29 @@ body.anchor-notes-pin-bottom .nav-folder-children {
 
 /* top pin */
 
-body.anchor-notes-pin-top .nav-folder {
+body.anchor-notes-pin-top .nav-folder-children .nav-folder {
     order: 2;
 }
 
-body.anchor-notes-pin-top .nav-file {
+body.anchor-notes-pin-top .nav-folder-children .nav-file {
     order: 3;
 }
 
-body.anchor-notes-pin-top .nav-file.is-anchor-note {
-    order: 1 !important;
+body.anchor-notes-pin-top .nav-folder-children .nav-file.is-anchor-note {
+    order: 1;
 }
 
 
 /* bottom pin */
 
-body.anchor-notes-pin-bottom .nav-folder {
+body.anchor-notes-pin-bottom .nav-folder-children .nav-folder {
     order: 1;
 }
 
-body.anchor-notes-pin-bottom .nav-file {
+body.anchor-notes-pin-bottom .nav-folder-children .nav-file {
     order: 2;
 }
 
-body.anchor-notes-pin-bottom .nav-file.is-anchor-note {
-    order: 3 !important;
+body.anchor-notes-pin-bottom .nav-folder-children .nav-file.is-anchor-note {
+    order: 3;
 }
