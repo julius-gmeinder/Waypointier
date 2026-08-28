@@ -1,8 +1,8 @@
-this plugins is heavily inspired by the [Waypoint](https://github.com/IdreesInc/Waypoint) obsidian plugin, intended to be used **without [Folder Notes](https://github.com/LostPaul/obsidian-folder-notes)**, but offering a similar experience by defining **Anchor-Notes** with regex.
+this plugins is heavily inspired by the [Waypoint](https://github.com/IdreesInc/Waypoint) obsidian plugin, intended to be used without [Folder Notes](https://github.com/LostPaul/obsidian-folder-notes), but offering a similar experience by defining **Anchor-Notes** with regex.
 
 ## Usage
 
-Instead of using folder-notes, you use regex to define your **Anchor-Notes**, only notes that match the regex can contain **Anchors**
+You use regex to define your **Anchor-Notes**, only notes that match the regex can contain **Anchors**
 
 Otherwise, the anchor functionality is basically a clone of [Waypoint](https://github.com/IdreesInc/Waypoint):
 - `%% Anchor %%` triggers an Anchor to spawn.

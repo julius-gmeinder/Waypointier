@@ -355,7 +355,9 @@ class AnchorNotesSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Anchor Notes' });
+        new Setting(containerEl)
+            .setName('Anchor Notes')
+            .setHeading();
 
         new Setting(containerEl)
             .setName('Allowed Files Regex')
@@ -381,7 +383,9 @@ class AnchorNotesSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        containerEl.createEl('h2', { text: 'Anchors' });
+        new Setting(containerEl)
+            .setName('Anchors')
+            .setHeading();
 
         new Setting(containerEl)
             .setName('Included File Types')
